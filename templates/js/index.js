@@ -13,6 +13,12 @@ function submitSearch() {
         parsed.forEach(function(result) {
           var row = $("<tr><td>" + result.Title + "</td><td>" + result.Author + "</td><td>" + result.Year +  "</td><td>" + result.ID + "</td></tr>");
           searchResults.append(row);
+          row.on("click", function() {
+            $.ajax({
+              url:"/books/add?id=" + result.ID,
+              method: "GET"
+            })
+          })
         });
       }
     });
