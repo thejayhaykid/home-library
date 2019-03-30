@@ -22,6 +22,10 @@ import (
 	"github.com/yosssi/ace"
 )
 
+// Global Variables
+var db *sql.DB
+var dbmap *gorp.DbMap
+
 // Book is the default struct of a book
 type Book struct {
 	PK             int64  `db:"pk"`
@@ -58,8 +62,22 @@ type LoginPage struct {
 	Error string
 }
 
-var db *sql.DB
-var dbmap *gorp.DbMap
+// ClassifySearchResponse Puts received XML into struct
+type ClassifySearchResponse struct {
+	Results []SearchResult `xml:"works>work"`
+}
+
+// ClassifyBookResponse will Get pertinent information from XML
+type ClassifyBookResponse struct {
+	BookData struct {
+		Title  string `xml:"title,attr"`
+		Author string `xml:"author,attr"`
+		ID     string `xml:"owi,attr"`
+	} `xml:"work"`
+	Classification struct {
+		MostPopular string `xml:"sfa,attr"`
+	} `xml:"recommendations>ddc>mostPopular"`
+}
 
 func initDb() {
 	db, _ = sql.Open("sqlite3", "dev.db")
@@ -102,6 +120,58 @@ func getStringFromSession(r *http.Request, key string) string {
 		strVal = val.(string)
 	}
 	return strVal
+}
+
+func verifyUser(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	if r.URL.Path == "/login" {
+		next(w, r)
+		return
+	}
+
+	if username := getStringFromSession(r, "User"); username != "" {
+		if user, _ := dbmap.Get(User{}, username); user != nil {
+			next(w, r)
+			return
+		}
+	}
+	http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
+}
+
+func find(id string) (ClassifyBookResponse, error) {
+	var c ClassifyBookResponse
+	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&owi=" + url.QueryEscape(id))
+
+	if err != nil {
+		return ClassifyBookResponse{}, err
+	}
+
+	err = xml.Unmarshal(body, &c)
+	return c, err
+}
+
+func search(query string) ([]SearchResult, error) {
+	var c ClassifySearchResponse
+	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&title=" + url.QueryEscape(query))
+
+	if err != nil {
+		return []SearchResult{}, err
+	}
+
+	err = xml.Unmarshal(body, &c)
+	return c.Results, err
+}
+
+func classifyAPI(url string) ([]byte, error) {
+	var resp *http.Response
+	var err error
+
+	if resp, err = http.Get(url); err != nil {
+		return []byte{}, err
+	}
+
+	defer resp.Body.Close()
+
+	return ioutil.ReadAll(resp.Body)
 }
 
 func main() {
@@ -262,73 +332,4 @@ func main() {
 	n.Use(negroni.HandlerFunc(verifyUser))
 	n.UseHandler(mux)
 	n.Run(":8080")
-}
-
-func verifyUser(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	if r.URL.Path == "/login" {
-		next(w, r)
-		return
-	}
-
-	if username := getStringFromSession(r, "User"); username != "" {
-		if user, _ := dbmap.Get(User{}, username); user != nil {
-			next(w, r)
-			return
-		}
-	}
-	http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
-}
-
-// ClassifySearchResponse Puts received XML into struct
-type ClassifySearchResponse struct {
-	Results []SearchResult `xml:"works>work"`
-}
-
-// ClassifyBookResponse will Get pertinent information from XML
-type ClassifyBookResponse struct {
-	BookData struct {
-		Title  string `xml:"title,attr"`
-		Author string `xml:"author,attr"`
-		ID     string `xml:"owi,attr"`
-	} `xml:"work"`
-	Classification struct {
-		MostPopular string `xml:"sfa,attr"`
-	} `xml:"recommendations>ddc>mostPopular"`
-}
-
-func find(id string) (ClassifyBookResponse, error) {
-	var c ClassifyBookResponse
-	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&owi=" + url.QueryEscape(id))
-
-	if err != nil {
-		return ClassifyBookResponse{}, err
-	}
-
-	err = xml.Unmarshal(body, &c)
-	return c, err
-}
-
-func search(query string) ([]SearchResult, error) {
-	var c ClassifySearchResponse
-	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&title=" + url.QueryEscape(query))
-
-	if err != nil {
-		return []SearchResult{}, err
-	}
-
-	err = xml.Unmarshal(body, &c)
-	return c.Results, err
-}
-
-func classifyAPI(url string) ([]byte, error) {
-	var resp *http.Response
-	var err error
-
-	if resp, err = http.Get(url); err != nil {
-		return []byte{}, err
-	}
-
-	defer resp.Body.Close()
-
-	return ioutil.ReadAll(resp.Body)
 }
