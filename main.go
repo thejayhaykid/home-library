@@ -3,7 +3,9 @@ package main
 import (
 	"os"
 
-	"./src/system/app"
+	DB "home-library/src/system/db"
+
+	"home-library/src/system/app"
 
 	"flag"
 
@@ -11,6 +13,7 @@ import (
 )
 
 var port string
+var dbConn string
 
 func init() {
 	flag.StringVar(&port, "port", "8000", "Assigning the port that the server should listen on.")
@@ -28,6 +31,10 @@ func init() {
 }
 
 func main() {
+	if _, err := DB.Connect(); err != nil {
+		panic(err)
+	}
+
 	s := app.NewServer()
 
 	s.Init(port)
