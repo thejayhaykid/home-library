@@ -15,7 +15,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/goincremental/negroni-sessions"
+	sessions "github.com/goincremental/negroni-sessions"
 	"github.com/goincremental/negroni-sessions/cookiestore"
 	gmux "github.com/gorilla/mux"
 	"github.com/urfave/negroni"
@@ -26,45 +26,9 @@ import (
 var db *sql.DB
 var dbmap *gorp.DbMap
 
-// Book is the default struct of a book
-type Book struct {
-	PK             int64  `db:"pk"`
-	Title          string `db:"title"`
-	Author         string `db:"author"`
-	Classification string `db:"classification"`
-	ID             string `db:"id"`
-	User           string `db:"user"`
-}
-
-// User is login information
-type User struct {
-	Username string `db:"username"`
-	Secret   []byte `db:"secret"`
-}
-
-// Page struct for name of webpage that I am on
-type Page struct {
-	Books  []Book
-	Filter string
-	User   string
-}
-
-// SearchResult gets values that are displayed on the page from XML received
-type SearchResult struct {
-	Title  string `xml:"title,attr"`
-	Author string `xml:"author,attr"`
-	Year   string `xml:"hyr,attr"`
-	ID     string `xml:"owi,attr"`
-}
-
 // LoginPage determines if login page contains an error
 type LoginPage struct {
 	Error string
-}
-
-// ClassifySearchResponse Puts received XML into struct
-type ClassifySearchResponse struct {
-	Results []SearchResult `xml:"works>work"`
 }
 
 // ClassifyBookResponse will Get pertinent information from XML
