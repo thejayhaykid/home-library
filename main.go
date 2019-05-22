@@ -1,6 +1,7 @@
 package main
 
 import (
+	"home-library/models"
 	"net/http"
 
 	"database/sql"
@@ -10,9 +11,7 @@ import (
 	"gopkg.in/gorp.v1"
 
 	"encoding/json"
-	"encoding/xml"
 	"io/ioutil"
-	"net/url"
 	"strconv"
 
 	sessions "github.com/goincremental/negroni-sessions"
@@ -31,25 +30,13 @@ type LoginPage struct {
 	Error string
 }
 
-// ClassifyBookResponse will Get pertinent information from XML
-type ClassifyBookResponse struct {
-	BookData struct {
-		Title  string `xml:"title,attr"`
-		Author string `xml:"author,attr"`
-		ID     string `xml:"owi,attr"`
-	} `xml:"work"`
-	Classification struct {
-		MostPopular string `xml:"sfa,attr"`
-	} `xml:"recommendations>ddc>mostPopular"`
-}
-
 func initDb() {
 	db, _ = sql.Open("sqlite3", "dev.db")
 
 	dbmap = &gorp.DbMap{Db: db, Dialect: gorp.SqliteDialect{}}
 
-	dbmap.AddTableWithName(Book{}, "books").SetKeys(true, "pk")
-	dbmap.AddTableWithName(User{}, "users").SetKeys(false, "username")
+	dbmap.AddTableWithName(models.Book{}, "books").SetKeys(true, "pk")
+	dbmap.AddTableWithName(models.User{}, "users").SetKeys(false, "username")
 	dbmap.CreateTablesIfNotExists()
 }
 
@@ -61,7 +48,7 @@ func verifyDatabase(w http.ResponseWriter, r *http.Request, next http.HandlerFun
 	next(w, r)
 }
 
-func getBookCollection(books *[]Book, sortCol string, filterByClass string, username string, w http.ResponseWriter) bool {
+func getBookCollection(books *[]models.Book, sortCol string, filterByClass string, username string, w http.ResponseWriter) bool {
 	if sortCol == "" {
 		sortCol = "pk"
 	}
@@ -93,36 +80,12 @@ func verifyUser(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	}
 
 	if username := getStringFromSession(r, "User"); username != "" {
-		if user, _ := dbmap.Get(User{}, username); user != nil {
+		if user, _ := dbmap.Get(models.User{}, username); user != nil {
 			next(w, r)
 			return
 		}
 	}
 	http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
-}
-
-func find(id string) (ClassifyBookResponse, error) {
-	var c ClassifyBookResponse
-	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&owi=" + url.QueryEscape(id))
-
-	if err != nil {
-		return ClassifyBookResponse{}, err
-	}
-
-	err = xml.Unmarshal(body, &c)
-	return c, err
-}
-
-func search(query string) ([]SearchResult, error) {
-	var c ClassifySearchResponse
-	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&title=" + url.QueryEscape(query))
-
-	if err != nil {
-		return []SearchResult{}, err
-	}
-
-	err = xml.Unmarshal(body, &c)
-	return c.Results, err
 }
 
 func classifyAPI(url string) ([]byte, error) {
@@ -150,7 +113,7 @@ func main() {
 			return
 		}
 
-		p := Page{Books: []Book{}, Filter: getStringFromSession(r, "Filter"), User: getStringFromSession(r, "User")}
+		p := models.Page{Books: []models.Book{}, Filter: getStringFromSession(r, "Filter"), models.User: getStringFromSession(r, "User")}
 		if !getBookCollection(&p.Books, getStringFromSession(r, "SortBy"), getStringFromSession(r, "Filter"), p.User, w) {
 			return
 		}
@@ -161,7 +124,7 @@ func main() {
 	}).Methods("GET")
 
 	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-		var results []SearchResult
+		var results []models.SearchResult
 		var err error
 
 		if results, err = search(r.FormValue("search")); err != nil {
@@ -175,13 +138,13 @@ func main() {
 	}).Methods("POST")
 
 	mux.HandleFunc("/books", func(w http.ResponseWriter, r *http.Request) {
-		var book ClassifyBookResponse
+		var book models.ClassifyBookResponse
 		var err error
 
 		if book, err = find(r.FormValue("id")); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		b := Book{
+		b := models.Book{
 			PK:             -1,
 			Title:          book.BookData.Title,
 			Author:         book.BookData.Author,
@@ -201,7 +164,7 @@ func main() {
 	}).Methods("PUT")
 
 	mux.HandleFunc("/books", func(w http.ResponseWriter, r *http.Request) {
-		var b []Book
+		var b []models.Book
 		if !getBookCollection(&b, r.FormValue("sortBy"), getStringFromSession(r, "Filter"), getStringFromSession(r, "User"), w) {
 			return
 		}
@@ -215,7 +178,7 @@ func main() {
 	}).Methods("GET").Queries("sortBy", "{sortBy:title|author|classification}")
 
 	mux.HandleFunc("/books", func(w http.ResponseWriter, r *http.Request) {
-		var b []Book
+		var b []models.Book
 		if !getBookCollection(&b, getStringFromSession(r, "SortBy"), r.FormValue("filter"), getStringFromSession(r, "User"), w) {
 			return
 		}
@@ -230,7 +193,7 @@ func main() {
 
 	mux.HandleFunc("/books/{pk}", func(w http.ResponseWriter, r *http.Request) {
 		pk, _ := strconv.ParseInt(gmux.Vars(r)["pk"], 10, 64)
-		var b Book
+		var b models.Book
 		if err := dbmap.SelectOne(&b, "select * from books where pk=? and user=?", pk, getStringFromSession(r, "User")); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
@@ -245,7 +208,7 @@ func main() {
 		var p LoginPage
 		if r.FormValue("register") != "" {
 			secret, _ := bcrypt.GenerateFromPassword([]byte(r.FormValue("password")), bcrypt.DefaultCost)
-			user := User{r.FormValue("username"), secret}
+			user := models.User{r.FormValue("username"), secret}
 			if err := dbmap.Insert(&user); err != nil {
 				p.Error = err.Error()
 			} else {
@@ -254,13 +217,13 @@ func main() {
 				return
 			}
 		} else if r.FormValue("login") != "" {
-			user, err := dbmap.Get(User{}, r.FormValue("username"))
+			user, err := dbmap.Get(models.User{}, r.FormValue("username"))
 			if err != nil {
 				p.Error = err.Error()
 			} else if user == nil {
 				p.Error = "No such user found with Username: " + r.FormValue("username")
 			} else {
-				u := user.(*User)
+				u := user.(*models.User)
 				if err = bcrypt.CompareHashAndPassword(u.Secret, []byte(r.FormValue("password"))); err != nil {
 					p.Error = err.Error()
 				} else {
