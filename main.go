@@ -153,7 +153,7 @@ func main() {
 		var book models.ClassifyBookResponse
 		var err error
 
-		if book, err = find(r.FormValue("id")); err != nil {
+		if book, err = models.Find(r.FormValue("id")); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		b := models.Book{
