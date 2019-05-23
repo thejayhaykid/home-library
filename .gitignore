@@ -13,3 +13,5 @@
 *.out
 
 config.ini
+.env
+.vscode
