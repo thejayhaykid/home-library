@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/xml"
-	"home-library/models"
 	"net/url"
 )
 
@@ -29,12 +28,12 @@ type ClassifyBookResponse struct {
 }
 
 // Find a book from a string
-func Find(id string) (models.ClassifyBookResponse, error) {
-	var c models.ClassifyBookResponse
-	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&owi=" + url.QueryEscape(id))
+func Find(id string) (ClassifyBookResponse, error) {
+	var c ClassifyBookResponse
+	body, err := ClassifyAPI("http://classify.oclc.org/classify2/Classify?summary=true&owi=" + url.QueryEscape(id))
 
 	if err != nil {
-		return models.ClassifyBookResponse{}, err
+		return ClassifyBookResponse{}, err
 	}
 
 	err = xml.Unmarshal(body, &c)

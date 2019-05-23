@@ -1,8 +1,9 @@
 package main
 
 import (
-	"home-library/models"
 	"net/http"
+
+	"github.com/thejayhaykid/home-library/models"
 
 	"database/sql"
 
@@ -11,19 +12,27 @@ import (
 	"gopkg.in/gorp.v1"
 
 	"encoding/json"
-	"io/ioutil"
 	"strconv"
 
+	"github.com/gobuffalo/envy"
 	sessions "github.com/goincremental/negroni-sessions"
-	"github.com/goincremental/negroni-sessions/cookiestore"
 	gmux "github.com/gorilla/mux"
-	"github.com/urfave/negroni"
+	"github.com/gorilla/sessions"
+	"github.com/labstack/echo"
+	"github.com/labstack/echo-contrib/session"
+	"github.com/labstack/echo/middleware"
 	"github.com/yosssi/ace"
 )
 
 // Global Variables
 var db *sql.DB
 var dbmap *gorp.DbMap
+
+// Note: Don't store your key in your source code. Pass it via an
+// environmental variable, or flag (or both), and don't accidentally commit it
+// alongside your code. Ensure your key is sufficiently random - i.e. use Go's
+// crypto/rand or securecookie.GenerateRandomKey(32) and persist the result.
+var store = sessions.NewCookieStore(envy.Get("SESSION_KEY"))
 
 // LoginPage determines if login page contains an error
 type LoginPage struct {
@@ -67,7 +76,9 @@ func getBookCollection(books *[]models.Book, sortCol string, filterByClass strin
 
 func getStringFromSession(r *http.Request, key string) string {
 	var strVal string
-	if val := sessions.GetSession(r).Get(key); val != nil {
+	session, _ := store.Get(r, "session-name")
+
+	if val := session.Values[key]; val != nil {
 		strVal = val.(string)
 	}
 	return strVal
@@ -88,17 +99,18 @@ func verifyUser(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
 }
 
-func classifyAPI(url string) ([]byte, error) {
-	var resp *http.Response
-	var err error
-
-	if resp, err = http.Get(url); err != nil {
-		return []byte{}, err
+// LogoutHandler will log a user out
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	session, err := store.Get(r, "session-name")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	defer resp.Body.Close()
+	session.Values["User"] = nil
+	session.Values["Filter"] = nil
+	session.Save(r, w)
 
-	return ioutil.ReadAll(resp.Body)
+	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
 func main() {
@@ -212,7 +224,7 @@ func main() {
 			if err := dbmap.Insert(&user); err != nil {
 				p.Error = err.Error()
 			} else {
-				sessions.GetSession(r).Set("User", user.Username)
+				session.GetSession(r).Set("User", user.Username)
 				http.Redirect(w, r, "/", http.StatusFound)
 				return
 			}
@@ -246,17 +258,15 @@ func main() {
 		}
 	})
 
-	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-		sessions.GetSession(r).Set("User", nil)
-		sessions.GetSession(r).Set("Filter", nil)
+	mux.HandleFunc("/logout", LougoutHandler)
 
-		http.Redirect(w, r, "/login", http.StatusFound)
-	})
-
-	n := negroni.Classic()
-	n.Use(sessions.Sessions("home-library", cookiestore.New([]byte("my-secret-123"))))
-	n.Use(negroni.HandlerFunc(verifyDatabase))
-	n.Use(negroni.HandlerFunc(verifyUser))
-	n.UseHandler(mux)
-	n.Run(":8080")
+	e := echo.New()
+	e.Use(session.Middleware(sessions.NewCookieStore(envy.Get("SESSION_KEY"))))
+	e.Use(verifyDatabase)
+	e.Use(verifyUser)
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+	e.UseHandler(mux)
+	e.Static("/", "/assets")
+	e.Logger.Fatal(e.Start(":8080"))
 }
