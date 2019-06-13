@@ -20,7 +20,37 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 }
 
 // StartPage is a start
-func StartPage(c echo.Context) error {
+func startPage(c echo.Context) error {
+	return c.Render(http.StatusOK, "index", "World")
+}
+
+// SearchBook with a given search query
+func searchBook(c echo.Context) error {
+	return c.Render(http.StatusOK, "index", "World")
+}
+
+// PutBooks with ID
+func putBooks(c echo.Context) error {
+	return c.Render(http.StatusOK, "index", "World")
+}
+
+// GetBooks with a give filter
+func getBooks(c echo.Context) error {
+	return c.Render(http.StatusOK, "index", "World")
+}
+
+// DeleteBooks with given ID
+func deleteBooks(c echo.Context) error {
+	return c.Render(http.StatusOK, "index", "World")
+}
+
+// Login to account
+func login(c echo.Context) error {
+	return c.Render(http.StatusOK, "index", "World")
+}
+
+// Logout of account
+func logout(c echo.Context) error {
 	return c.Render(http.StatusOK, "index", "World")
 }
 
@@ -32,7 +62,13 @@ func Start() *echo.Echo {
 
 	e := echo.New()
 	e.Renderer = t
-	e.GET("/", StartPage)
+	e.GET("/", startPage)
+	e.POST("/search", searchBook)
+	e.PUT("/books", putBooks)
+	e.GET("/books", getBooks)
+	e.DELETE("/books/:pk", deleteBooks)
+	e.GET("/login", login)
+	e.GET("/logout", logout)
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Static("/assets", "assets")
