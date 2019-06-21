@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
+	md "github.com/thejayhaykid/home-library/models"
 )
 
 // Template is for rendering
@@ -26,6 +27,7 @@ func startPage(c echo.Context) error {
 
 // SearchBook with a given search query
 func searchBook(c echo.Context) error {
+	book := md.Book
 	return c.Render(http.StatusOK, "index", "World")
 }
 
