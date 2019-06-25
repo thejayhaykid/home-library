@@ -5,10 +5,19 @@ import (
 	"io"
 	"net/http"
 
+	"database/sql"
+
+	_ "github.com/mattn/go-sqlite3"
+	"gopkg.in/gorp.v1"
+
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
-	md "github.com/thejayhaykid/home-library/models"
+	// md "github.com/thejayhaykid/home-library/models"
 )
+
+// Global Variables
+var db *sql.DB
+var dbmap *gorp.DbMap
 
 // Template is for rendering
 type Template struct {
@@ -27,7 +36,7 @@ func startPage(c echo.Context) error {
 
 // SearchBook with a given search query
 func searchBook(c echo.Context) error {
-	book := md.Book
+	//var book md.Book
 	return c.Render(http.StatusOK, "index", "World")
 }
 
